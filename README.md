@@ -17,17 +17,12 @@ pyrotini
     
     ```
 
-    activate environment:
-
-    ```bash
-    source activate prttest
-    ```
-
 2. **Clone this repository and install the environment:**
 
    ```bash 
    git clone https://github.com/DanYev/pyrotini.git
    mamba env create -n prttest --file env.yml
+   source activate prttest
    ```
 
 3. **Install the package:**
