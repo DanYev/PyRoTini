@@ -9,12 +9,12 @@ pyrotini
 
 ### Installation
 
-1. **Install the environment:**
+1. **Load modules:**
 
     ```bash
     module load mamba
     module load gromacs
-    mamba env create -n prttest --file env.yml
+    
     ```
 
     activate environment:
@@ -23,10 +23,11 @@ pyrotini
     source activate prttest
     ```
 
-2. **Clone this repository:**
+2. **Clone this repository and install the environment:**
 
    ```bash 
    git clone https://github.com/DanYev/pyrotini.git
+   mamba env create -n prttest --file env.yml
    ```
 
 3. **Install the package:**
