@@ -13,66 +13,32 @@ pyrotini
 
     ```bash
     module load mamba
+    module load gromacs
     mamba env create -n prttest --file env.yml
     ```
 
-    make sure you have conda initialized in your environment:
+    activate environment:
 
     ```bash
-    conda init bash
+    source activate prttest
     ```
 
 2. **Clone this repository:**
 
-   ```bash
-   git clone https://github.com/John-Kazan/OpenMMScripts.git
+   ```bash 
+   git clone https://github.com/DanYev/pyrotini.git
    ```
 
-3. **Run the setup script:**
+3. **Install the package:**
 
     ```bash
-    ./setup.sh
+    pip install -e .
     ```
-
-### Running Simulations
-
-#### Using `openmm_npt.py`
-
-This script runs the NPT simulation directly using OpenMM. It utilizes GPU (CUDA) for acceleration.
-
-**Usage:**
-
-```bash
-python openmm_npt.py -pdb ./pdb/1btl.pdb
-```
-
-Replace `pdb/1btl.pdb` with the path to your PDB file.
-
-#### Using `openmm_npt.sh` (for PHX cluster)
-
-This wrapper script automatically loads the correct CUDA version and OpenMM environment on the PHX cluster.
-
-**Usage:**
-
-```bash
-openmm_npt.sh -pdb ./pdb/1btl.pdb
-```
-
-Replace `1btl.pdb` with your PDB file or use the one provided for testing.
-
-### Submitting to Scheduler
-
-To submit the simulation to a scheduler (e.g., SLURM), use the `submit_sbatch.sh` script. 
-
-**Before submission:**
-
-Edit `submit_sbatch.sh`:
-- Modify the `openmm_npt.sh -pdb ./pdb/1btl.pdb` line to reflect your own PDB.
 
 **Submission:**
 
 ```bash
-sbatch submit_sbatch.sh
+sbatch submit2sol.sh
 ```
 
 To continue the simulation from the last point simply submit the job again. It will automatially continue.
