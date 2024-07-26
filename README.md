@@ -41,14 +41,6 @@ pyrotini
 sbatch submit2sol.sh
 ```
 
-To continue the simulation from the last point simply submit the job again. It will automatially continue.
-
-### Notes
-
-- The simulation is set to run for 100ns. On RTX 2080 the performance is ~200ns/day.
-- This repository is designed for running simulations on the PHX cluster, but can be adapted for other environments.
-- The provided scripts are examples and may need modifications to suit your specific needs.
-- For more detailed information about OpenMM, refer to the official documentation: [https://openmm.org/](https://openmm.org/)
 
 ### Copyright
 
