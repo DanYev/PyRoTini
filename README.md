@@ -31,7 +31,7 @@ pyrotini
     pip install -e .
     ```
 
-**Submission:**
+**Find tutorial directory and run:**
 
 ```bash
 sbatch submit2sol.sh
