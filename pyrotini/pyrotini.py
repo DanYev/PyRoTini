@@ -97,7 +97,7 @@ def martinize_go(pdb, wdir, go_map='go.map', go_eps=10.0, go_moltype="protein", 
     command = f'martinize2 -f {pdb} -go {go_map} -go-moltype {go_moltype} -go-eps {go_eps} \
         -go-low {go_low} -go-up {go_up} -go-res-dist {go_res_dist} \
         -o protein.top -x protein.pdb -p backbone -dssp -ff martini3001 \
-        -sep -scfix -cys auto -resid input -maxwarn 1000'
+        -sep -scfix -cys 0.3 -resid input -maxwarn 1000'
     sp.run(command.split())
     os.chdir(bdir)
     
@@ -123,6 +123,18 @@ def solvate(wdir, bt='dodecahedron', d=1.25, radius=0.21, conc=0.0):
     
     
 def energy_minimization(wdir, ncpus=0):
+    """
+    Perform energy minimization using GROMACS.
+
+    Parameters:
+    wdir (str): The working directory where the energy minimization will be performed.
+    ncpus (int, optional): Number of CPU threads to use for the minimization. Defaults to 0, 
+                           which lets GROMACS decide the number of threads.
+
+    Raises:
+    FileNotFoundError: If the necessary input files are not found in the specified directories.
+    RuntimeError: If the GROMACS commands fail to execute.
+    """
     bdir = os.getcwd()
     os.chdir(wdir)
     os.makedirs('mdrun', exist_ok=True)
@@ -226,6 +238,15 @@ def calculate_dfi(covarince_matrix, resn):
  
  
 def percentile(x):
+    """
+    Calculate the percentile ranking of each element in a 1-dimensional array.
+
+    Parameters:
+    x (np.ndarray): Input array.
+
+    Returns:
+    np.ndarray: Array of percentile rankings.
+    """
     sorted_x = np.argsort(x)
     px = np.zeros(len(x))
     for n in range(len(x)):
@@ -265,6 +286,14 @@ def get_dfis(wdir):
     os.chdir(bdir)
     
     
+def parse_dfi(file):
+    df = pd.read_csv(file, sep=' ', header=None)
+    res = df[0]
+    dfi = df[1]
+    pdfi = df[2]
+    return res, dfi, pdfi
+    
+    
 def plot_dfi(wdir):
     bdir = os.getcwd()
     os.chdir(wdir)
@@ -272,10 +301,7 @@ def plot_dfi(wdir):
     dfi_files = [f for f in os.listdir() if f.startswith('dfi_av') and f.endswith('.dat')]
     fig = plt.figure(figsize=(12,4))
     for file in dfi_files:
-        df = pd.read_csv(file, sep=' ', header=None)
-        res = df[0]
-        dfi = df[1]
-        pdfi = df[2]
+        res, dfi, pdfi = parse_dfi(file)
         plt.plot(res, pdfi)
     plt.autoscale(tight=True)
     plt.grid()
