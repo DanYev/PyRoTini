@@ -3,6 +3,8 @@ import importlib.resources
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import random
+import pyrosetta
 import pandas as pd
 import shutil
 import subprocess as sp
@@ -21,7 +23,144 @@ def prt_parser():
     parser.add_argument("-n", "--ncpus", required=False, help="Number of requested CPUS for a batch job")
     return parser.parse_args()
 
-                    
+def prt_design_parser():
+    """
+    Parse command-line arguments.
+    """
+    parser = argparse.ArgumentParser(description="Runs PyRosetta design")
+    parser.add_argument("-f", "--pdb", required=True, help="PDB file")
+    parser.add_argument("-t", "--target", type=str, required=True, help="Target residue to mutate around as integer")
+    parser.add_argument("-r", "--run", type=int, required=True, help="Run number for the design")
+    return parser.parse_args()
+
+def initialize_pyrosetta():
+    """Initialize PyRosetta with custom flags."""
+    pyrosetta.init('''
+        -relax:default_repeats 5
+        -relax:constrain_relax_to_start_coords
+        -relax:coord_constrain_sidechains
+        -relax:ramp_constraints false
+        -score::hbond_params correct_params
+        -no_his_his_pairE
+        -extrachi_cutoff 1
+        -multi_cool_annealer 10
+        -ex1 -ex2
+        -use_input_sc
+        -flip_HNQ
+        -ignore_unrecognized_res
+        -relax:coord_cst_stdev 0.5
+    ''')
+
+def clean_and_load_pdb(filename):
+    """Clean and load the PDB file."""
+    pyrosetta.toolbox.cleaning.cleanATOM(filename)
+    name = os.path.splitext(filename)[0]
+    starting_pose = pyrosetta.pose_from_pdb(f"{name}.clean.pdb")
+    original_pose = starting_pose.clone()
+    
+    return original_pose, starting_pose, name
+
+def setup_dir(target):
+    """Set up the design environment and return necessary objects."""
+    main_dir = os.getcwd()
+    output_dir = os.path.join("Outputs", f"mutating_around_res{target}")
+    os.makedirs(output_dir, exist_ok=True)
+    os.chdir(output_dir)
+    
+    return main_dir, output_dir 
+
+def fast_relax(pose, scorefxn):
+    fr = pyrosetta.rosetta.protocols.relax.FastRelax()
+    fr.set_scorefxn(scorefxn)
+    fr.apply(pose)
+    print(f"Relaxed score: {scorefxn(pose):.2f}")
+    relaxed_pose = pose.clone()
+
+    return relaxed_pose
+
+def setup_job_distributor(name, n_decoys, scorefxn):
+    """Set up the job distributor."""
+    return pyrosetta.toolbox.py_jobdistributor.PyJobDistributor(name, n_decoys, scorefxn)
+
+def design_around(pose, target, scorefxn):
+    """Set up and apply the design protocol."""
+    target_residue = pyrosetta.rosetta.core.select.residue_selector.ResidueIndexSelector(str(target))
+    design_radius = random.randint(8, 12)
+    design_shell = pyrosetta.rosetta.core.select.residue_selector.NeighborhoodResidueSelector(target_residue, design_radius, False)
+    repack_shell = pyrosetta.rosetta.core.select.residue_selector.NeighborhoodResidueSelector(target_residue, design_radius + 4, True)
+    imp_residues = "2,19,20,37,42,45,48,51,82,97,105,107,120,141,142,149,158,194,201,209,218,226,230,235"
+    imp_residue_selector = pyrosetta.rosetta.core.select.residue_selector.ResidueIndexSelector(imp_residues)
+
+    tf = pyrosetta.rosetta.core.pack.task.TaskFactory()
+    tf.push_back(pyrosetta.rosetta.core.pack.task.operation.InitializeFromCommandline())
+    tf.push_back(pyrosetta.rosetta.core.pack.task.operation.IncludeCurrent())
+    tf.push_back(pyrosetta.rosetta.core.pack.task.operation.NoRepackDisulfides())
+    tf.push_back(pyrosetta.rosetta.core.pack.task.operation.OperateOnResidueSubset(
+        pyrosetta.rosetta.core.pack.task.operation.RestrictToRepackingRLT(), imp_residue_selector, False))
+    tf.push_back(pyrosetta.rosetta.core.pack.task.operation.OperateOnResidueSubset(
+        pyrosetta.rosetta.core.pack.task.operation.RestrictToRepackingRLT(), design_shell, True))
+    tf.push_back(pyrosetta.rosetta.core.pack.task.operation.OperateOnResidueSubset(
+        pyrosetta.rosetta.core.pack.task.operation.PreventRepackingRLT(), repack_shell, True))
+
+    prm = pyrosetta.rosetta.protocols.minimization_packing.PackRotamersMover()
+    prm.task_factory(tf)
+    prm.score_function(scorefxn)
+    prm.apply(pose)
+    
+    print(f"Design: {scorefxn(pose):.2f}")
+    print_radius(design_radius)
+
+def minimize(pose, scorefxn):
+    """Set up the minimize movers and minimize pose for the design process."""
+    mm = pyrosetta.rosetta.core.kinematics.MoveMap()
+    mm.set_bb(False)
+    mm.set_chi(True)
+    mm.set_jump(True)
+
+    min_bb = pyrosetta.rosetta.protocols.minimization_packing.MinMover()
+    min_bb.score_function(scorefxn)
+    min_bb.movemap(mm)
+    min_bb.min_type('dfpmin_armijo_nonmonotone')
+    min_bb.tolerance(0.001)
+    min_bb.max_iter(1000)
+
+    multi_min = pyrosetta.rosetta.protocols.monte_carlo.GenericMonteCarloMover()
+    multi_min.set_mover(min_bb)
+    multi_min.set_scorefxn(scorefxn)
+    multi_min.set_max_accepted_trials(10)
+    multi_min.set_sampletype("low")
+    multi_min.set_temperature(0.6)
+    multi_min.set_recover_low(True)
+    multi_min.set_preapply(False)
+
+    multi_min.apply(pose)
+    print(f"After minimization score: {scorefxn(pose):.2f}")
+
+def print_mutations(original_pose, designed_pose, job_name):
+    """Print and log the mutations between the original and designed poses."""
+    original_seq = original_pose.sequence()
+    designed_seq = designed_pose.sequence()
+    mutations = []
+    for i in range(0, original_pose.total_residue()):
+        if original_seq[i] != designed_seq[i]:
+            resid = original_pose.pdb_info().pose2pdb(i+1)
+            mutations.append(f"{original_seq[i]}{resid.split()[0]}{designed_seq[i]}")
+    mutations_str = f"{job_name} - Mutations: " + ", ".join(mutations)
+    print(mutations_str)
+    with open("mutations.txt", "a") as mutation_file:
+        if mutations:
+            mutation_file.write(mutations_str + "\n")
+        else:
+            mutation_file.write("\n")
+    return mutations
+
+def print_radius(radius):
+    """Print and log the radius of design shell and repack shell."""
+    radius_str = f"Design shell: {radius}A      Repack shell: {radius+4}A"
+    print(radius_str)
+    with open("radius.txt", "a") as radius_file:
+        radius_file.write(radius_str + "\n")
+                  
 def make_topology_file(wdir, protein='protein'):
     r"""
     -protein        Name of the protein (just for the reference, doesn't affect anything)
