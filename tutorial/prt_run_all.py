@@ -6,10 +6,11 @@ def run_all():
     pdb = args.pdb
     wdir = args.wdir
     
-    # Preparing files
-    prt.prepare_files(pdb, wdir)
+    # # Preparing files
+    # prt.prepare_files(pdb, wdir)
     
     # Coarse-graining the protein + solvating
+    prt.fix_go_map(wdir, in_map='protein.map', out_map='go.map')
     prt.martinize_go('protein.pdb', wdir, go_map='go.map', go_eps=10.0, go_moltype="protein", go_low=0.3, go_up=0.8, go_res_dist=3)
     prt.solvate(wdir, bt='dodecahedron', d=1.25, radius=0.21, conc=0.0)
     

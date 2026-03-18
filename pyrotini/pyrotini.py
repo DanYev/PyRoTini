@@ -61,7 +61,7 @@ def fix_go_map(wdir, in_map, out_map='go.map'):
          with open (out_map, 'w') as out_file:
             for line in in_file:
                 if line.startswith('R '):
-                    new_line = ' '.join(line.split()[:-1])
+                    new_line = ' '.join(line.split()) + ' 1'
                     out_file.write(f'{new_line}\n')
     os.chdir(bdir)
 

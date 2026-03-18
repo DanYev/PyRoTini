@@ -122,3 +122,7 @@ ENV/
 */_version.py
 # Cookiecutter-CMS Test Artifacts
 /tests/CI_files
+
+# slurm and MD
+*slurm_output/
+*test/
